@@ -1,0 +1,10 @@
+.shell{width:min(1080px,calc(100% - 36px))}
+.workspace{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:24px;align-items:start}
+.transcript-section,.claims-section{margin-top:30px}
+.transcript{min-height:300px;max-height:560px}
+.claims-section .results{max-height:620px;overflow:auto;padding:1px 3px 1px 0}
+@media(max-width:700px){
+  .workspace{grid-template-columns:1fr;gap:0}
+  .transcript{min-height:130px;max-height:250px}
+  .claims-section .results{max-height:none;overflow:visible}
+}

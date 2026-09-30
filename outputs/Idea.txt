@@ -1,0 +1,33 @@
+VOICECLAIM — NEW CHAT HANDOFF
+Updated: 2026-09-29
+
+FROZEN MVP
+Build a one-day, solo, $0 demo website: mic dictation → live transcript → AI automatically extracts up to three checkable factual claims from each short transcript chunk → Gemini Search grounding researches only those claims → page shows claim, cautious assessment, verdict label, and citations. No manual claim-selection click. No custom model training.
+
+PLATFORM DECISION
+Responsive website/local web app. Mic stays in the page; laptop layout shows transcript and results side-by-side, mobile stacks them. No app-store build. A tiny Node server keeps the Gemini API key off the frontend. Test in Chrome on the actual presentation device.
+
+CURRENT CODE
+- index.html / styles.css / layout.css: VoiceClaim page, mic and status, side-by-side desktop transcript/research results; stacked mobile layout
+- app.js: browser SpeechRecognition, 2.2-second pause chunking, serial transcript queue, result rendering
+- server.js: GET /api/status and POST /api/process-transcript; Gemini claim extraction then serial Google Search grounded calls
+- package.json: Node start script, no package dependencies
+- outputs/VoiceClaim-MVP-Scope.md: full frozen scope, API/schema, setup, acceptance criteria, one-day plan, risks
+
+SETUP
+Requires Node.js 18+ and a Gemini API key. In PowerShell from the project folder:
+  $env:GEMINI_API_KEY = "your-key"
+  npm start
+Open http://localhost:3000. Do not put the API key in app.js or commit it to GitHub.
+
+CURRENT IMPLEMENTATION ASSUMPTIONS
+- Model defaults to gemini-3.8-flash; override with GEMINI_MODEL if required.
+- Gemini endpoint: POST https://generativelanguage.googleapis.com/v1beta/interactions with x-goog-api-key.
+- Extraction call asks for JSON {"claims":[{"claim":"...","context":"..."}]} with max 3.
+- Each detected claim gets its own serial Google Search grounding call.
+- Web Speech API can use browser online recognition, has limited support, and may send audio for processing. Disclose mic use and test the selected language (en-IN/hi-IN) on the target browser.
+- Gemini free-tier pricing, quota, and terms may change. Current official docs showed free Gemini 3.8 Flash tokens and Search grounding quota at update time. Free-tier data may be used to improve products; never submit sensitive speech.
+- The output is an AI evidence assessment, not ground truth. No-claim state should remain visible for opinions/incomplete speech.
+
+NEXT ACTION
+Start the app with the API key set, then test the complete microphone → 3–4 sentence transcript → one factual claim → linked research-card flow in the target browser. Fix observed API/browser issues before adding anything else. No tests have been added or run yet.

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VoiceClaim — spoken claim research</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/layout.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="top"><div class="mark">VC</div><div><strong>VoiceClaim</strong><span>Spoken claims, assessed against sources</span></div><span id="api-status" class="local-pill">CHECKING SETUP</span></header>
+    <section class="intro"><p class="eyebrow">VOICECLAIM · MVP</p><h1>Keep talking.<br>We’ll find the claims.</h1><p class="sub">Speak naturally. AI will pick out one factual claim at a time, find web sources, and assess the evidence.</p></section>
+    <section class="panel controls">
+      <div class="control-row"><label for="language">Speech language</label><select id="language"><option value="en-IN">English (India)</option><option value="hi-IN">Hindi (India)</option></select></div>
+      <button id="mic-button" class="mic-button" type="button"><span class="mic-dot"></span><span id="mic-label">Start listening</span></button>
+      <p id="mic-message" class="microcopy">When you pause, the latest transcript is sent for claim detection. Only detected factual claims are researched.</p>
+      <p class="privacy-note">Speech recognition may use your browser’s online service. Transcript chunks and source excerpts go to Gemini; claim searches go to Tavily. Don’t use sensitive or private conversations.</p>
+    </section>
+    <div class="workspace">
+      <section class="transcript-section">
+        <div class="section-heading"><div><p class="eyebrow">LIVE TRANSCRIPT</p><h2>What was said</h2></div><span id="speech-state" class="state">Mic off</span></div>
+        <div id="transcript" class="transcript" aria-live="polite"><span class="placeholder">Your speech will appear here…</span></div>
+      </section>
+      <section class="claims-section">
+        <div class="section-heading"><div><p class="eyebrow">AUTOMATIC CLAIM CHECKS</p><h2>Research results</h2></div><span id="queue-state" class="state">Waiting for speech</span></div>
+        <div id="results" class="results" aria-live="polite"><div class="empty">No claims checked yet. Start speaking to begin.</div></div>
+        <p id="error" class="error" role="alert" hidden></p>
+      </section>
+    </div>
+    <footer>Prototype only. AI can miss claims or misread evidence. Open sources before relying on a result.</footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
