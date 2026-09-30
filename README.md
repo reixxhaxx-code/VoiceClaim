@@ -36,6 +36,12 @@ If Gemini 3.8 Flash returns a temporary 503 or a 429 quota/rate-limit response, 
 
 The demo limits each client IP to 4 transcript segments per minute and asks Gemini to reject evidence for ambiguous or mismatched locations. This in-memory limit is a small demo safeguard, not production access control; do not expose the app publicly without proper authentication and abuse monitoring.
 
+## Deploy a demo on Render
+
+This repo includes `render.yaml` for a single Node web service that serves both the website and its API. In Render, choose **New → Blueprint**, connect the private `reixxhaxx-code/VoiceClaim` repository, and create the Blueprint. When prompted, enter `GEMINI_API_KEY` and `TAVILY_API_KEY` as secret environment values; keep them out of Git. Once deployment finishes, open the generated `onrender.com` HTTPS URL, allow microphone access in Chrome, and test `/api/health` before trying a short claim.
+
+Render's free web services sleep after 15 minutes without traffic and can take about a minute to wake. This is suitable for a hackathon demo, not a reliable production service. The app stores no persistent data; its demo rate limit is in memory and resets when the service restarts. `TRUST_PROXY_HEADERS=true` is enabled in the Render Blueprint so the demo limiter can distinguish clients behind Render's proxy; this is not production-grade abuse prevention. Anyone with the public app URL can use the configured provider keys and consume their quotas, so share it selectively and monitor Gemini/Tavily usage. Hosting may be free; AI/search provider quotas and charges are separate.
+
 ## Run
 
 From this folder:
@@ -69,3 +75,4 @@ Browser speech recognition may send audio to the browser vendor's online service
 - `server.js`: local API, Gemini claim extraction and source assessment, Tavily search
 - `.env.example`: safe template with placeholders only
 - `test-grounding.js`: one-claim integration check for Gemini and Tavily
+- `render.yaml`: Render Blueprint configuration for the demo deployment

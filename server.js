@@ -34,6 +34,7 @@ const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|
 const TAVILY_API_KEY = (process.env.TAVILY_API_KEY || '').trim().replace(/^["']|["']$/g, '');
 const MODEL = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim().replace(/^["']|["']$/g, '');
 const FALLBACK_MODEL = (process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite').trim().replace(/^["']|["']$/g, '');
+const TRUST_PROXY_HEADERS = process.env.TRUST_PROXY_HEADERS === 'true';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 const TAVILY_API_URL = 'https://api.tavily.com/search';
 const TRANSCRIPT_LIMIT = 4;
@@ -42,7 +43,9 @@ const transcriptRequestsByIp = new Map();
 
 function hasTranscriptAllowance(req) {
   const now = Date.now();
-  const clientIp = req.socket.remoteAddress || 'unknown';
+  const forwardedFor = TRUST_PROXY_HEADERS ? req.headers['x-forwarded-for'] : '';
+  const forwardedClientIp = typeof forwardedFor === 'string' ? forwardedFor.split(',')[0].trim() : '';
+  const clientIp = forwardedClientIp || req.socket.remoteAddress || 'unknown';
   const recentRequests = (transcriptRequestsByIp.get(clientIp) || [])
     .filter(timestamp => now - timestamp < TRANSCRIPT_WINDOW_MS);
 
@@ -78,23 +81,36 @@ function safeRedact(text) {
 }
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(status, { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff' });
+  res.writeHead(status, {
+    'Content-Type': type,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'microphone=(self)',
+    'Cache-Control': 'no-store'
+  });
   res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
 }
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
     let body = '';
+    let tooLarge = false;
     req.on('data', chunk => {
+      if (tooLarge) return;
       body += chunk;
       if (body.length > 15_000) {
-        reject(new Error('Request payload exceeds limit.'));
-        req.destroy();
+        tooLarge = true;
+        body = '';
       }
     });
     req.on('end', () => {
+      if (tooLarge) {
+        reject(Object.assign(new Error('Request payload exceeds limit.'), { statusCode: 413 }));
+        return;
+      }
       try { resolve(JSON.parse(body || '{}')); }
-      catch { reject(new Error('Send a valid JSON request.')); }
+      catch { reject(Object.assign(new Error('Send a valid JSON request.'), { statusCode: 400 })); }
     });
     req.on('error', reject);
   });
@@ -197,13 +213,20 @@ async function searchTavily(query) {
 
   const rawResults = Array.isArray(data.results) ? data.results : [];
   return rawResults
-    .filter(r => r && typeof r.url === 'string' && r.url.trim())
-    .slice(0, 3)
-    .map(r => ({
-      title: (r.title || new URL(r.url).hostname).trim(),
-      url: r.url.trim(),
-      content: (r.content || '').trim()
-    }));
+    .map(r => {
+      if (!r || typeof r.url !== 'string') return null;
+      try {
+        const url = new URL(r.url.trim());
+        if (!['http:', 'https:'].includes(url.protocol)) return null;
+        return {
+          title: (r.title || url.hostname).trim(),
+          url: url.href,
+          content: (r.content || '').trim()
+        };
+      } catch { return null; }
+    })
+    .filter(Boolean)
+    .slice(0, 3);
 }
 
 function parseSingleClaim(text) {
@@ -342,35 +365,42 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  if (req.method === 'GET' && req.url === '/api/health') {
+    return send(res, 200, { status: 'ok' });
+  }
+
   // Process transcript chunk
   if (req.method === 'POST' && req.url === '/api/process-transcript') {
-    if (!hasTranscriptAllowance(req)) {
-      return send(res, 429, {
-        error: 'Demo limit reached: this network can check up to 4 speech segments per minute. Pause briefly, then try again.'
-      });
-    }
-
-    if (!GEMINI_API_KEY || !TAVILY_API_KEY) {
-      const missing = [];
-      if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
-      if (!TAVILY_API_KEY) missing.push('TAVILY_API_KEY');
-      return send(res, 503, {
-        error: `Missing required API keys: ${missing.join(', ')}. Please configure them in your .env file.`
-      });
-    }
-
     try {
-      const { transcript } = await readJson(req);
+      const payload = await readJson(req);
+      const transcript = payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? payload.transcript
+        : undefined;
       if (typeof transcript !== 'string' || transcript.trim().length < 8 || transcript.length > 2_500) {
         return send(res, 400, { error: 'Transcript chunk must be between 8 and 2,500 characters.' });
+      }
+
+      if (!hasTranscriptAllowance(req)) {
+        return send(res, 429, {
+          error: 'Demo limit reached: this network can check up to 4 speech segments per minute. Pause briefly, then try again.'
+        });
+      }
+
+      if (!GEMINI_API_KEY || !TAVILY_API_KEY) {
+        const missing = [];
+        if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
+        if (!TAVILY_API_KEY) missing.push('TAVILY_API_KEY');
+        return send(res, 503, {
+          error: `Missing required API keys: ${missing.join(', ')}. Please configure them in your environment.`
+        });
       }
 
       const outcome = await processTranscriptChunk(transcript.trim());
       return send(res, 200, outcome);
     } catch (error) {
       console.error('API processing error:', safeRedact(error.message));
-      const statusCode = error.message.includes('429') ? 429 : error.message.includes('503') ? 503 : 502;
-      return send(res, statusCode, { error: error.message || 'Fact-checking failed. Please try again.' });
+      const statusCode = error.statusCode || (error.message.includes('429') ? 429 : error.message.includes('503') ? 503 : 502);
+      return send(res, statusCode, { error: safeRedact(error.message) || 'Fact-checking failed. Please try again.' });
     }
   }
 

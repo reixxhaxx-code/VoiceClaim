@@ -38,7 +38,10 @@ function appendResult(result, index) {
   if (resultsBox.querySelector('.empty')) resultsBox.innerHTML = '';
   const verdictMatch = (result.verdict || result.assessment || '').match(/^\s*(SUPPORTED|CONTRADICTED|MIXED|INSUFFICIENT EVIDENCE)/i);
   const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : 'INSUFFICIENT EVIDENCE';
-  const citations = result.citations || [];
+  const citations = (Array.isArray(result.citations) ? result.citations : []).filter(source => {
+    try { return ['http:', 'https:'].includes(new URL(source.url).protocol); }
+    catch { return false; }
+  });
   const card = document.createElement('article');
   card.className = 'claim-card';
   card.innerHTML = `<div class="card-top"><span class="claim-index">CLAIM ${index}</span><span class="verdict ${verdict.toLowerCase().replaceAll(' ', '-')}">${escapeHtml(verdict)}</span></div>
@@ -119,6 +122,7 @@ async function sendChunk(chunk) {
     // Do not display a verdict card on error
   } finally {
     isProcessing = false;
+    if (shouldListen && pendingChunk.trim()) scheduleChunk();
   }
 }
 
