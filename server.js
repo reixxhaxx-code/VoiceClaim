@@ -36,6 +36,34 @@ const MODEL = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim().replace(/^
 const FALLBACK_MODEL = (process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite').trim().replace(/^["']|["']$/g, '');
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 const TAVILY_API_URL = 'https://api.tavily.com/search';
+const TRANSCRIPT_LIMIT = 4;
+const TRANSCRIPT_WINDOW_MS = 60_000;
+const transcriptRequestsByIp = new Map();
+
+function hasTranscriptAllowance(req) {
+  const now = Date.now();
+  const clientIp = req.socket.remoteAddress || 'unknown';
+  const recentRequests = (transcriptRequestsByIp.get(clientIp) || [])
+    .filter(timestamp => now - timestamp < TRANSCRIPT_WINDOW_MS);
+
+  if (recentRequests.length >= TRANSCRIPT_LIMIT) {
+    transcriptRequestsByIp.set(clientIp, recentRequests);
+    return false;
+  }
+
+  recentRequests.push(now);
+  transcriptRequestsByIp.set(clientIp, recentRequests);
+
+  if (transcriptRequestsByIp.size > 1_000) {
+    for (const [ip, timestamps] of transcriptRequestsByIp) {
+      if (!timestamps.some(timestamp => now - timestamp < TRANSCRIPT_WINDOW_MS)) {
+        transcriptRequestsByIp.delete(ip);
+      }
+    }
+  }
+
+  return true;
+}
 
 function safeRedact(text) {
   if (!text) return '';
@@ -105,10 +133,12 @@ async function requestGemini(input, model) {
 
 async function callGemini(input) {
   let modelUsed = MODEL;
+  let primaryStatus = null;
   let { response, data } = await requestGemini(input, modelUsed);
 
-  if (response.status === 503 && FALLBACK_MODEL && FALLBACK_MODEL !== MODEL) {
-    console.warn(`Gemini ${MODEL} returned 503; retrying once with ${FALLBACK_MODEL}.`);
+  if ([429, 503].includes(response.status) && FALLBACK_MODEL && FALLBACK_MODEL !== MODEL) {
+    primaryStatus = response.status;
+    console.warn(`Gemini ${MODEL} returned ${primaryStatus}; retrying once with ${FALLBACK_MODEL}.`);
     await new Promise(resolve => setTimeout(resolve, 800));
     modelUsed = FALLBACK_MODEL;
     ({ response, data } = await requestGemini(input, modelUsed));
@@ -116,16 +146,23 @@ async function callGemini(input) {
 
   if (!response.ok) {
     if (response.status === 429) {
-      throw new Error('Gemini API rate limit or quota exceeded (429). Please wait a moment and try again.');
+      const fallbackNote = primaryStatus
+        ? ` Both ${MODEL} and ${FALLBACK_MODEL} are currently rate-limited or out of quota.`
+        : '';
+      throw new Error(`Gemini API rate limit or quota exceeded (429).${fallbackNote} Wait before retrying and check your active limits in Google AI Studio.`);
     }
     if (response.status === 503) {
-      throw new Error(`Gemini is temporarily unavailable (503) on ${modelUsed}. Please try again shortly.`);
+      const fallbackNote = primaryStatus
+        ? ` ${MODEL} and ${FALLBACK_MODEL} both returned 503.`
+        : '';
+      throw new Error(`Gemini is temporarily unavailable (503).${fallbackNote} Please try again shortly.`);
     }
     const errObj = Array.isArray(data) ? data[0]?.error : data.error;
     const message = errObj?.message || `Gemini API returned HTTP ${response.status}.`;
     throw new Error(message);
   }
   data.voiceclaimModel = modelUsed;
+  data.voiceclaimFallbackStatus = primaryStatus;
   return data;
 }
 
@@ -219,7 +256,7 @@ ${transcript}`;
 
   if (sources.length === 0) {
     const extractionModelNote = extractionData.voiceclaimModel !== MODEL
-      ? ` Claim extraction used fallback model ${extractionData.voiceclaimModel} after ${MODEL} returned 503.`
+      ? ` Claim extraction used fallback model ${extractionData.voiceclaimModel} after ${MODEL} returned ${extractionData.voiceclaimFallbackStatus}.`
       : '';
     return {
       status: 'no_search_results',
@@ -254,6 +291,7 @@ CRITICAL RULES:
    INSUFFICIENT EVIDENCE
 4. After the verdict label, explain your reasoning in 2 to 4 concise sentences, specifically referencing what the sources state.
 5. Do not invent citations or URLs.
+6. Match the source to the exact person, place, date, and context in the claim. If a place name is ambiguous or the sources refer to different places (for example, Delhi, Ontario versus New Delhi, India), treat the claim as INSUFFICIENT EVIDENCE unless the transcript context clearly resolves the match.
 
 CLAIM: ${parsedClaim.claim}
 CONTEXT: ${parsedClaim.context || 'None supplied.'}
@@ -265,6 +303,9 @@ ${formattedSources}`;
   const assessmentText = extractGeminiText(assessmentData);
   const fallbackModels = [...new Set([extractionData.voiceclaimModel, assessmentData.voiceclaimModel]
     .filter(model => model && model !== MODEL))];
+  const primaryLimitNote = fallbackModels.length
+    ? ` after ${MODEL} returned a temporary 429 or 503.`
+    : '';
 
   const verdictMatch = assessmentText.match(/^\s*(SUPPORTED|CONTRADICTED|MIXED|INSUFFICIENT EVIDENCE)/i);
   const verdict = verdictMatch ? verdictMatch[1].toUpperCase() : 'INSUFFICIENT EVIDENCE';
@@ -284,7 +325,7 @@ ${formattedSources}`;
       assessment: assessmentText,
       citations,
       disclaimer: fallbackModels.length
-        ? `AI assessment based on the sources below. Gemini used fallback model ${fallbackModels.join(' and ')} after ${MODEL} returned 503.`
+        ? `AI assessment based on the sources below. Gemini used fallback model ${fallbackModels.join(' and ')}${primaryLimitNote}`
         : 'AI assessment based on the sources below.'
     }]
   };
@@ -303,6 +344,12 @@ const server = http.createServer(async (req, res) => {
 
   // Process transcript chunk
   if (req.method === 'POST' && req.url === '/api/process-transcript') {
+    if (!hasTranscriptAllowance(req)) {
+      return send(res, 429, {
+        error: 'Demo limit reached: this network can check up to 4 speech segments per minute. Pause briefly, then try again.'
+      });
+    }
+
     if (!GEMINI_API_KEY || !TAVILY_API_KEY) {
       const missing = [];
       if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY');

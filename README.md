@@ -32,7 +32,9 @@ TAVILY_API_KEY=put_your_tavily_key_here
 PORT=3000
 ```
 
-If Gemini 3.8 Flash returns a temporary 503, the server retries that request once with Gemini 3.5 Flash-Lite. The result card will say when the fallback model was used. You can change the fallback model with `GEMINI_FALLBACK_MODEL`.
+If Gemini 3.8 Flash returns a temporary 503 or a 429 quota/rate-limit response, the server retries that request once with Gemini 3.5 Flash-Lite. The result card will say when the fallback model was used. You can change the fallback model with `GEMINI_FALLBACK_MODEL`. A fallback cannot help if both models have exhausted their project quota.
+
+The demo limits each client IP to 4 transcript segments per minute and asks Gemini to reject evidence for ambiguous or mismatched locations. This in-memory limit is a small demo safeguard, not production access control; do not expose the app publicly without proper authentication and abuse monitoring.
 
 ## Run
 
