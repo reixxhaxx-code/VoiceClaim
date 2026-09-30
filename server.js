@@ -94,6 +94,22 @@ function send(res, status, body, type = 'application/json; charset=utf-8') {
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
+    if (req.body !== undefined) {
+      const payload = req.body;
+      const size = Buffer.byteLength(typeof payload === 'string' ? payload : JSON.stringify(payload));
+      if (size > 15_000) {
+        reject(Object.assign(new Error('Request payload exceeds limit.'), { statusCode: 413 }));
+        return;
+      }
+      if (typeof payload !== 'string') {
+        resolve(payload || {});
+        return;
+      }
+      try { resolve(JSON.parse(payload || '{}')); }
+      catch { reject(Object.assign(new Error('Send a valid JSON request.'), { statusCode: 400 })); }
+      return;
+    }
+
     let body = '';
     let tooLarge = false;
     req.on('data', chunk => {
@@ -354,7 +370,7 @@ ${formattedSources}`;
   };
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   // Status check endpoint
   if (req.method === 'GET' && req.url === '/api/status') {
     return send(res, 200, {
@@ -424,16 +440,21 @@ const server = http.createServer(async (req, res) => {
   };
 
   return send(res, 200, fs.readFileSync(file), types[path.extname(file)] || 'application/octet-stream');
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`VoiceClaim is available at http://localhost:${PORT}`);
-  const missing = [];
-  if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
-  if (!TAVILY_API_KEY) missing.push('TAVILY_API_KEY');
-  if (missing.length > 0) {
-    console.log(`Notice: Missing ${missing.join(' and ')} in .env. Add them to enable claim research.`);
-  } else {
-    console.log(`Configured with model: ${MODEL} + Tavily Search`);
-  }
-});
+if (require.main === module) {
+  const server = http.createServer(handleRequest);
+  server.listen(PORT, () => {
+    console.log(`VoiceClaim is available at http://localhost:${PORT}`);
+    const missing = [];
+    if (!GEMINI_API_KEY) missing.push('GEMINI_API_KEY');
+    if (!TAVILY_API_KEY) missing.push('TAVILY_API_KEY');
+    if (missing.length > 0) {
+      console.log(`Notice: Missing ${missing.join(' and ')} in .env. Add them to enable claim research.`);
+    } else {
+      console.log(`Configured with model: ${MODEL} + Tavily Search`);
+    }
+  });
+}
+
+module.exports = handleRequest;

@@ -36,11 +36,11 @@ If Gemini 3.8 Flash returns a temporary 503 or a 429 quota/rate-limit response, 
 
 The demo limits each client IP to 4 transcript segments per minute and asks Gemini to reject evidence for ambiguous or mismatched locations. This in-memory limit is a small demo safeguard, not production access control; do not expose the app publicly without proper authentication and abuse monitoring.
 
-## Deploy a demo on Render
+## Deploy a demo on Vercel
 
-This repo includes `render.yaml` for a single Node web service that serves both the website and its API. In Render, choose **New → Blueprint**, connect the private `reixxhaxx-code/VoiceClaim` repository, and create the Blueprint. When prompted, enter `GEMINI_API_KEY` and `TAVILY_API_KEY` as secret environment values; keep them out of Git. Once deployment finishes, open the generated `onrender.com` HTTPS URL, allow microphone access in Chrome, and test `/api/health` before trying a short claim.
+This repo includes a Vercel Node.js Function at `api/[...path].js`; the HTML, CSS, and browser JavaScript are served as static files. Push the repo to GitHub, import it in Vercel, and leave the build settings at their detected defaults. In **Project Settings → Environment Variables**, add `GEMINI_API_KEY`, `TAVILY_API_KEY`, `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite`, and `TRUST_PROXY_HEADERS=true`. Keep API keys in Vercel's environment settings, never in Git. Redeploy after saving the variables, then open the generated HTTPS URL and test `/api/health` before trying a short claim.
 
-Render's free web services sleep after 15 minutes without traffic and can take about a minute to wake. This is suitable for a hackathon demo, not a reliable production service. The app stores no persistent data; its demo rate limit is in memory and resets when the service restarts. `TRUST_PROXY_HEADERS=true` is enabled in the Render Blueprint so the demo limiter can distinguish clients behind Render's proxy; this is not production-grade abuse prevention. Anyone with the public app URL can use the configured provider keys and consume their quotas, so share it selectively and monitor Gemini/Tavily usage. Hosting may be free; AI/search provider quotas and charges are separate.
+Vercel serves the static site from its edge network and invokes the API function when a request arrives; this avoids Render Free's 15-minute idle sleep. Function duration is set to 300 seconds in `vercel.json` for the sequential Gemini/Tavily calls; Vercel documents this maximum for Hobby when Fluid Compute is enabled. [Vercel function limits](https://vercel.com/docs/functions/limitations). The demo rate limiter is held in function memory and is not reliable global abuse prevention. Anyone with the public app URL may consume your Gemini/Tavily quotas, so share it selectively and monitor provider usage. Hosting availability and provider quotas are separate.
 
 ## Run
 
@@ -75,4 +75,4 @@ Browser speech recognition may send audio to the browser vendor's online service
 - `server.js`: local API, Gemini claim extraction and source assessment, Tavily search
 - `.env.example`: safe template with placeholders only
 - `test-grounding.js`: one-claim integration check for Gemini and Tavily
-- `render.yaml`: Render Blueprint configuration for the demo deployment
+- `api/[...path].js`, `vercel.json`: Vercel API function and deployment settings
