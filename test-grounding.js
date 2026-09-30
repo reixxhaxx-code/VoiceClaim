@@ -56,7 +56,7 @@ function extractGeminiText(data) {
 
 async function runTest() {
   console.log('====================================================');
-  console.log(' VoiceClaim: Gemini 3.8 Flash + Tavily Search Test');
+  console.log(' VoiceClaim: Gemini + Tavily Search Test');
   console.log('====================================================');
 
   const missing = [];
@@ -77,7 +77,7 @@ async function runTest() {
   console.log(`Model:      ${MODEL}`);
   console.log(`Claim:      "${claim}"`);
   console.log(`Search:     Tavily Search API (Basic depth, max 3 results)`);
-  console.log(`Assessment: Gemini 3.8 Flash (Sources only, no Google Search grounding tool)\n`);
+  console.log(`Assessment: ${MODEL} (Sources only, no Google Search grounding tool)\n`);
 
   // Step 1: Tavily Search
   console.log('1. Searching Tavily for live evidence...');

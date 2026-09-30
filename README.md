@@ -27,9 +27,12 @@ Example `.env.example` entries:
 ```text
 GEMINI_API_KEY=put_your_gemini_key_here
 GEMINI_MODEL=gemini-3.8-flash
+GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
 TAVILY_API_KEY=put_your_tavily_key_here
 PORT=3000
 ```
+
+If Gemini 3.8 Flash returns a temporary 503, the server retries that request once with Gemini 3.5 Flash-Lite. The result card will say when the fallback model was used. You can change the fallback model with `GEMINI_FALLBACK_MODEL`.
 
 ## Run
 
