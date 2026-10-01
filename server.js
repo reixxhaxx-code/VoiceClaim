@@ -28,7 +28,7 @@ function loadEnv() {
 
 loadEnv();
 
-const ROOT = __dirname;
+const ROOT = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT || 3000);
 const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
 const TAVILY_API_KEY = (process.env.TAVILY_API_KEY || '').trim().replace(/^["']|["']$/g, '');

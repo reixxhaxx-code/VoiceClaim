@@ -38,7 +38,7 @@ The demo limits each client IP to 4 transcript segments per minute and asks Gemi
 
 ## Deploy a demo on Vercel
 
-This repo includes Vercel Node.js Functions for `/api/status`, `/api/health`, and `/api/process-transcript`; the HTML, CSS, and browser JavaScript are served as static files. Push the repo to GitHub, import it in Vercel, and leave the build settings at their detected defaults. In **Project Settings → Environment Variables**, add `GEMINI_API_KEY`, `TAVILY_API_KEY`, `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite`, and `TRUST_PROXY_HEADERS=true`. Keep API keys in Vercel's environment settings, never in Git. Redeploy after saving the variables, then open the generated HTTPS URL and test `/api/health` before trying a short claim.
+This repo uses Vercel's **Other** preset with the `public/` directory as its static output. Vercel Node.js Functions serve `/api/status`, `/api/health`, and `/api/process-transcript`. Push the repo to GitHub and import it in Vercel; `vercel.json` supplies the framework, build, and output settings. In **Project Settings → Environment Variables**, add `GEMINI_API_KEY`, `TAVILY_API_KEY`, `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite`, and `TRUST_PROXY_HEADERS=true`. Keep API keys in Vercel's environment settings, never in Git. Redeploy after saving the variables, then open the generated HTTPS URL and test `/api/health` before trying a short claim.
 
 Vercel serves the static site from its edge network and invokes the API function when a request arrives; this avoids Render Free's 15-minute idle sleep. Function duration is set to 300 seconds in `vercel.json` for the sequential Gemini/Tavily calls; Vercel documents this maximum for Hobby when Fluid Compute is enabled. [Vercel function limits](https://vercel.com/docs/functions/limitations). The demo rate limiter is held in function memory and is not reliable global abuse prevention. Anyone with the public app URL may consume your Gemini/Tavily quotas, so share it selectively and monitor provider usage. Hosting availability and provider quotas are separate.
 
@@ -70,8 +70,8 @@ Browser speech recognition may send audio to the browser vendor's online service
 
 ## Main files
 
-- `index.html`, `styles.css`, `layout.css`: responsive website
-- `app.js`: browser speech recognition, transcript chunking, and result cards
+- `public/index.html`, `public/styles.css`, `public/layout.css`: responsive website
+- `public/app.js`: browser speech recognition, transcript chunking, and result cards
 - `server.js`: local API, Gemini claim extraction and source assessment, Tavily search
 - `.env.example`: safe template with placeholders only
 - `test-grounding.js`: one-claim integration check for Gemini and Tavily
