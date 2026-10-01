@@ -234,15 +234,15 @@ micButton.addEventListener('click', () => {
 
 fetch('/api/status').then(response => response.json()).then(data => {
   if (data.configured) {
-    apiStatus.textContent = `AI READY · ${data.model} + TAVILY`;
+    apiStatus.textContent = `AI READY · ${data.model} + TINYFISH SEARCH`;
     apiStatus.classList.add('ready');
   } else {
     const missing = [];
     if (!data.geminiConfigured) missing.push('Gemini');
-    if (!data.tavilyConfigured) missing.push('Tavily');
+    if (!data.tinyfishConfigured) missing.push('TinyFish');
     apiStatus.textContent = `KEYS NEEDED (${missing.join(' + ')})`;
     apiStatus.classList.remove('ready');
-    micMessage.textContent = `Please configure ${missing.join(' and ')} in your .env file to enable live research.`;
+    micMessage.textContent = `Please configure ${missing.join(' and ')} in the server environment to enable live research.`;
   }
 }).catch(() => {
   apiStatus.textContent = 'SERVER NOT READY';
